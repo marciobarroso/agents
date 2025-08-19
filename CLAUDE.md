@@ -1,0 +1,294 @@
+# Claude Code Guidelines
+
+## Implementation Best Practices
+
+### 0 - Purpose
+
+These rules ensure maintainability, safety, and developer velocity.
+**MUST** rules are enforced by CI; **SHOULD** rules are strongly recommended.
+
+---
+
+### 1 - Before Coding
+
+- **BP-1 (MUST)**Ask the user clarifying questions.
+- **BP-2 (SHOULD)**Draft and confirm an approach for complex work.
+- **BP-3 (SHOULD)**If 2 approaches exist, list clear pros and cons.
+
+---
+
+### 2 - While Coding
+
+- **C-1 (MUST)**Follow TDD: scaffold stub -> write failing test -> implement.
+- **C-2 (MUST)**Name functions with existing domain vocabulary for consistency.
+- **C-3 (SHOULD NOT)**Introduce classes when small testable functions suffice.
+- **C-4 (SHOULD)** Prefer simple, composable, testable functions.
+- **C-5 (MUST)**Prefer branded `type`s for IDs
+
+```ts
+type UserId = Brand<string, 'UserId'> // ✅ Good
+type UserId = string // ❌ Bad
+```
+
+- **C-6 (MUST)**Use `import type { }` for type-only imports.
+- **C-7 (SHOULD NOT)** Add comments except for critical caveats; rely on self-explanatory code.
+- **C-8 (SHOULD)** Default to `type`; use `interface` only when more readable or interface merging is required.
+- **C-9 (SHOULD NOT)** Extract a new function unless it will be reused elsewhere, is the only way to unit-test otherwise untestable logic, or drastically improves readability of an opaque block.
+
+---
+
+### 3 - Testing
+
+- **T-1 (MUST)**For a simple function, colocate unit tests in `*.spec.ts` in same directory as source file.
+- **T-2 (MUST)**For any API change, add/extend integration tests in `__tests__/*.test.ts`.
+- **T-3 (MUST)**ALWAYS separate pure-logic unit tests from DB-touching integration tests.
+- **T-4 (SHOULD)**Prefer integration tests over heavy mocking.
+- **T-5 (SHOULD)** Unit-test complex algorithms thoroughly.
+- **T-6 (SHOULD)** Test the entire structure in one assertion if possible
+
+```ts
+expect(result).toBe([value]) // Good
+
+expect(result).toHaveLength(1) // Bad
+expect(result[0]).toBe(value) // Bad
+```
+
+---
+
+### 4 - Database
+
+- **D-1 (MUST)**Use MongoDB with Mongoose for database operations.
+- **D-2 (MUST)**Separate Zod schemas for validation from Mongoose schemas for database modeling.
+- **D-3 (MUST)**Place Mongoose models in `schema.ts` files within each feature directory.
+- **D-4 (SHOULD)**Use branded types for MongoDB ObjectIds to prevent ID mixups between different entities.
+- **D-5 (MUST)**Handle MongoDB errors properly using the error handling utilities in `app/shared/lib/errors.ts`.
+
+---
+
+### 5 - Code Organization
+
+- **O-1 (MUST)**Place code in `app/shared/` only if used by 2+ features.
+- **O-2 (MUST)**Organize features using Next.js route groups: `app/(features)/(feature-name)/`.
+- **O-3 (MUST)**Each feature should have its own: `components/`, `hooks/`, `types/`, `api/` directories.
+- **O-4 (SHOULD)**Use the BaseController pattern for API routes to maintain consistency.
+
+---
+
+### 6 - Tooling Gates
+
+- **G-1 (MUST)**`npm run format` (prettier) passes.
+- **G-2 (MUST)**`npm run lint` passes.
+- **G-3 (MUST)**`npm run test` passes.
+- **G-4 (MUST)**TypeScript compilation succeeds.
+
+---
+
+### 7 - Git
+
+- **GH-1 (MUST**) Use Conventional Commits format when writing commit messages: https://www.conventionalcommits.org/en/v1.0.0
+- **GH-2 (SHOULD NOT**) Refer to Claude or Anthropic in commit messages.
+
+---
+
+## Writing Functions Best Practices
+
+When evaluating whether a function you implemented is good or not, use this checklist:
+
+1. Can you read the function and HONESTLY easily follow what it's doing? If yes, then stop here.
+2. Does the function have very high cyclomatic complexity? (number of independent paths, or, in a lot of cases, number of nesting if if-else as a proxy). If it does, then it's probably sketchy.
+3. Are there any common data structures and algorithms that would make this function much easier to follow and more robust? Parsers, trees, stacks / queues, etc.
+4. Are there any unused parameters in the function?
+5. Are there any unnecessary type casts that can be moved to function arguments?
+6. Is the function easily testable without mocking core features (e.g. sql queries, redis, etc.)? If not, can this function be tested as part of an integration test?
+7. Does it have any hidden untested dependencies or any values that can be factored out into the arguments instead? Only care about non-trivial dependencies that can actually change or affect the function.
+8. Brainstorm 3 better function names and see if the current name is the best, consistent with rest of codebase.
+
+IMPORTANT: you SHOULD NOT refactor out a separate function unless there is a compelling need, such as:
+
+- the refactored function is used in more than one place
+- the refactored function is easily unit testable while the original function is not AND you can't test it any other way
+- the original function is extremely hard to follow and you resort to putting comments everywhere just to explain it
+
+## Writing Tests Best Practices
+
+When evaluating whether a test you've implemented is good or not, use this checklist:
+
+1. SHOULD parameterize inputs; never embed unexplained literals such as 42 or "foo" directly in the test.
+2. SHOULD NOT add a test unless it can fail for a real defect. Trivial asserts (e.g., expect(2).toBe(2)) are forbidden.
+3. SHOULD ensure the test description states exactly what the final expect verifies. If the wording and assert don't align, rename or rewrite.
+4. SHOULD compare results to independent, pre-computed expectations or to properties of the domain, never to the function's output re-used as the oracle.
+5. SHOULD follow the same lint, type-safety, and style rules as prod code (prettier, ESLint, strict types).
+6. SHOULD express invariants or axioms (e.g., commutativity, idempotence, round-trip) rather than single hard-coded cases whenever practical. Use `fast-check` library e.g.
+
+```ts
+import fc from 'fast-check';
+import { describe, expect, test } from 'jest';
+import { getCharacterCount } from './string';
+
+describe('properties', () => {
+  test('concatenation functoriality', () => {
+    fc.assert(
+      fc.property(
+        fc.string(),
+        fc.string(),
+        (a, b) =>
+          getCharacterCount(a + b) ===
+          getCharacterCount(a) + getCharacterCount(b)
+      )
+    );
+  });
+});
+```
+
+7. Unit tests for a function should be grouped under `describe(functionName, () => ...`.
+8. Use `expect.any(...)` when testing for parameters that can be anything (e.g. variable ids).
+9. ALWAYS use strong assertions over weaker ones e.g. `expect(x).toEqual(1)` instead of `expect(x).toBeGreaterThanOrEqual(1)`.
+10. SHOULD test edge cases, realistic input, unexpected input, and value boundaries.
+11. SHOULD NOT test conditions that are caught by the type checker.
+
+## Code Organization
+
+This is a Next.js 15 application using App Router with a feature-based architecture:
+
+- `app/` - Next.js 15 App Router root directory
+- `app/(features)/` - Feature-based modules using route groups:
+  - `(contacts)/` - Contact management (CRUD, forms, hooks, types, API routes)
+  - `(prospects)/` - Prospect management with Kanban board, dashboard
+  - `(notes)/` - Notes system with reminders and associations
+  - `(users)/` - User management functionality
+  - `(reminders)/` - Reminder system with completion tracking
+  - `(core)/` - Core features like geolocation
+- `app/shared/` - Shared utilities, components, types, and libraries
+  - `components/ui/` - Reusable UI components (shadcn/ui based)
+  - `lib/` - Core utilities (API client, DB connection, error handling, Auth0)
+  - `types/` - Shared TypeScript type definitions
+  - `core/` - Base controllers and configuration
+- `docs/` - Feature documentation (contact.md, prospect.md, etc.)
+- `data/` - Sample data files for development
+
+### Feature Structure
+
+Each feature follows this consistent structure:
+```
+app/(features)/(feature-name)/
+├── api/
+│   └── feature-name/
+│       ├── route.ts          # Main CRUD endpoints
+│       ├── [id]/route.ts     # Individual resource endpoints
+│       ├── controller.ts     # Business logic
+│       └── schema.ts         # Zod + Mongoose schemas
+├── components/               # Feature-specific components
+├── hooks/                    # Feature-specific React hooks
+├── types/                    # Feature-specific TypeScript types
+└── feature-name/            # Next.js pages
+    ├── page.tsx             # List/index page
+    ├── [id]/page.tsx        # Detail page
+    └── new/page.tsx         # Create page
+```
+
+## Remember Shortcuts
+
+Remember the following shortcuts which the user may invoke at any time.
+
+### QNEW
+
+When I type "qnew", this means:
+
+```
+Understand all BEST PRACTICES listed in CLAUDE.md.
+Your code SHOULD ALWAYS follow these best practices.
+```
+
+### QPLAN
+
+When I type "qplan", this means:
+
+```
+Analyze similar parts of the codebase and determine whether your plan:
+- is consistent with rest of codebase
+- introduces minimal changes
+- reuses existing code
+```
+
+### QCODE
+
+When I type "qcode", this means:
+
+```
+Implement your plan and make sure your new tests pass.
+Always run tests to make sure you didn't break anything else.
+Always run `prettier` on the newly created files to ensure standard formatting.
+Always run `npm run lint` and ensure TypeScript compilation passes.
+```
+
+### QCHECK
+
+When I type "qcheck", this means:
+
+```
+You are a SKEPTICAL senior software engineer.
+Perform this analysis for every MAJOR code change you introduced (skip minor changes):
+
+1. CLAUDE.md checklist Writing Functions Best Practices.
+2. CLAUDE.md checklist Writing Tests Best Practices.
+3. CLAUDE.md checklist Implementation Best Practices.
+```
+
+### QCHECKF
+
+When I type "qcheckf", this means:
+
+```
+You are a SKEPTICAL senior software engineer.
+Perform this analysis for every MAJOR function you added or edited (skip minor changes):
+
+1. CLAUDE.md checklist Writing Functions Best Practices.
+```
+
+### QCHECKT
+
+When I type "qcheckt", this means:
+
+```
+You are a SKEPTICAL senior software engineer.
+Perform this analysis for every MAJOR test you added or edited (skip minor changes):
+
+1. CLAUDE.md checklist Writing Tests Best Practices.
+```
+
+### QUX
+
+When I type "qux", this means:
+
+```
+Imagine you are a human UX tester of the feature you implemented.
+Output a comprehensive list of scenarios you would test, sorted by highest priority.
+```
+
+### QGIT
+
+When I type "qgit", this means:
+
+```
+Add all changes to staging, create a commit, and push to remote.
+
+Follow this checklist for writing your commit message:
+- SHOULD use Conventional Commits format: https://www.conventionalcommits.org/en/v1.0.0
+- SHOULD NOT refer to Claude or Anthropic in the commit message.
+- SHOULD structure commit message as follows:
+<type>[optional scope]: <description>
+[optional body]
+[optional footer(s)]
+- commit SHOULD contain the following structural elements to communicate intent:
+fix: a commit of the type fix patches a bug in your codebase (this correlates with PATCH in Semantic Versioning).
+feat: a commit of the type feat introduces a new feature to the codebase (this correlates with MINOR in Semantic Versioning).
+BREAKING CHANGE: a commit that has a footer BREAKING CHANGE:, or appends a ! after the type/scope, introduces a breaking API change (correlating with MAJOR in Semantic Versioning). A BREAKING CHANGE can be part of commits of any type.
+types other than fix: and feat: are allowed, for example @commitlint/config-conventional (based on the Angular convention) recommends build:, chore:, ci:, docs:, style:, refactor:, perf:, test:, and others.
+footers other than BREAKING CHANGE: <description> may be provided and follow a convention similar to git trailer format.
+```
+
+---
+
+## Credits
+
+This CLAUDE.md file is based on the AI coding rules and best practices from the [ai-coding-rules](https://github.com/SabrinaRamonov/ai-coding-rules) repository by [Sabrina Ramonov](https://github.com/SabrinaRamonov). The original repository provides comprehensive guidelines for implementing new features in existing complex codebases using AI coding tools while maintaining production-grade code quality.
