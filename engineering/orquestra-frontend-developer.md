@@ -196,6 +196,7 @@ const orquestraTheme = {
 - **Components Library**: [Component Overview](https://btg-pactual.supernova-docs.io/latest/componentes/overview-1ozhzYhr)
 - **Patterns & Pages**: [Pattern Preview](https://btg-pactual.supernova-docs.io/latest/patterns-and-pages/patterns/preview-aSCFAF7H)
 - **Business Guide**: [Business UX Guide](https://btg-pactual.supernova-docs.io/latest/guia-de-negocios/guia-de-negocios-para-ux-D5VWWc07)
+- **React Setup & Theme**: [Orquestra React Documentation](https://orquestrads.btgpactual.com/react/3.4.2/?path=/docs/orquestra-theme--docs)
 
 ## Copy-Paste Ready Component Examples
 
@@ -226,10 +227,10 @@ const AccountCard: React.FC<AccountCardProps> = ({
       onClick={onSelect}
     >
       <div className="flex justify-between items-start mb-4">
-        <Typography variant="h6" color="primary">
+      <Typography variant="h6" color="primary">
           {accountType === 'checking' ? 'Conta Corrente' : 
            accountType === 'savings' ? 'Conta Poupança' : 'Investimentos'}
-        </Typography>
+      </Typography>
         <Badge variant={isActive ? 'success' : 'secondary'}>
           {isActive ? 'Ativa' : 'Inativa'}
         </Badge>
